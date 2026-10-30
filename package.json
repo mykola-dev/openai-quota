@@ -1,0 +1,47 @@
+{
+  "name": "opencode-openai-quota-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ChatGPT subscription quota in the OpenCode V2 prompt footer",
+  "type": "module",
+  "files": ["index.ts", "tui.ts", "src", "README.md", "CHANGELOG.md", "SECURITY.md"],
+  "exports": {
+    ".": "./index.ts",
+    "./tui": "./tui.ts",
+    "./rpc": "./src/rpc.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@opencode/plugin": "2.2.3"
+  },
+  "devDependencies": {
+    "@opentui/core": "0.8.0",
+    "@opentui/solid": "0.8.0",
+    "@types/node": "^22.19.0",
+    "solid-js": "1.9.18",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "@opentui/core": ">=0.8.0",
+    "@opentui/solid": ">=0.8.0",
+    "solid-js": ">=1.9.0"
+  },
+  "peerDependenciesMeta": {
+    "@opentui/core": {
+      "optional": true
+    },
+    "@opentui/solid": {
+      "optional": true
+    },
+    "solid-js": {
+      "optional": true
+    }
+  },
+  "overrides": {
+    "seroval": "^1.6.11"
+  }
+}
