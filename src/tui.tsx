@@ -2,6 +2,7 @@ import { Plugin } from "@opencode/plugin/tui"
 import { createEffect, createMemo, createSignal, onCleanup, Show } from "solid-js"
 import { QuotaRpc, type QuotaResult, type QuotaSnapshot } from "./rpc.js"
 import { formatQuota, isOpenAIProvider, OPENAI_PROVIDER_ID } from "./usage.js"
+import { COLOR_KEYS, DEFAULT_SETTINGS, migratePrefix, parseTemplate, renderTemplate, validateColor, type DisplaySettings } from "./presentation.js"
 
 interface FooterState {
   snapshot: QuotaSnapshot | null
@@ -11,7 +12,84 @@ interface FooterState {
 
 export default Plugin.define({
   id: "openai-quota.tui",
-  setup(context) {
+  async setup(context) {
+    const [settings, updateSettings] = context.storage.store<DisplaySettings & { prefix?: string }>("settings", {
+      initial: structuredClone(DEFAULT_SETTINGS),
+    })
+    if (typeof settings.prefix === "string") {
+      await updateSettings((draft) => {
+        const migrated = migratePrefix({ ...draft, prefix: draft.prefix! })
+        delete draft.prefix
+        Object.assign(draft, migrated)
+      })
+    }
+
+    function Display(props: { snapshot: QuotaSnapshot | null; now: number }) {
+      const segments = createMemo(() => renderTemplate(settings, props.snapshot, props.now))
+      return <text>{segments().map((segment) => <span style={{ fg: segment.color }}>{segment.text}</span>)}</text>
+    }
+
+    function showPreview() {
+      const now = Date.now()
+      const sample: QuotaSnapshot = {
+        primaryRemaining: 37, secondaryRemaining: 88, fetchedAt: now,
+        primaryResetAt: now + 135 * 60_000, secondaryResetAt: now + 4 * 86_400_000,
+      }
+      context.ui.dialog.show(() => (
+        <box flexDirection="column" padding={1} gap={1}>
+          <text>OpenAI quota preview (sample values)</text>
+          <Display snapshot={sample} now={now} />
+          <text>Escape to close</text>
+        </box>
+      ))
+    }
+
+    async function openSettings(): Promise<void> {
+      try {
+        while (true) {
+          const choice = await context.ui.dialog.select({
+            title: "OpenAI quota settings",
+            options: [
+              { title: "Template", value: "template", description: settings.template || "Hidden" },
+              { title: "Default color", value: "defaultColor", description: settings.defaultColor || "Theme default" },
+              ...COLOR_KEYS.map((key) => ({ title: `Color: ${key}`, value: key, description: settings.colors[key] || "Default color" })),
+              { title: "Preview", value: "preview" },
+              { title: "Reset to defaults", value: "reset" },
+            ],
+          })
+          if (choice === undefined) return
+          if (choice === "preview") { showPreview(); return }
+          if (choice === "reset") {
+            if (await context.ui.dialog.confirm({ title: "Reset quota settings?", message: "Restore the default template and colors?" })) {
+              await updateSettings((draft) => { Object.assign(draft, structuredClone(DEFAULT_SETTINGS)) })
+            }
+            continue
+          }
+          const colorKey = COLOR_KEYS.find((key) => key === choice)
+          const isColor = !!colorKey || choice === "defaultColor"
+          const current = colorKey ? settings.colors[colorKey] : choice === "defaultColor" ? settings.defaultColor ?? "" : settings.template
+          const value = await context.ui.dialog.prompt({
+            title: isColor ? `${choice}: #RRGGBB / #RRGGBBAA (empty = ${colorKey ? "default color" : "theme"})` : "Template: {percent5h} {percent7d} {reset5h} {reset7d}",
+            value: current,
+          })
+          if (value === undefined) continue
+          try {
+            const normalized = isColor ? validateColor(value) : value
+            if (choice === "template") parseTemplate(value)
+            await updateSettings((draft) => {
+              if (colorKey) draft.colors[colorKey] = normalized
+              else if (choice === "defaultColor") draft.defaultColor = normalized
+              else draft.template = value
+            })
+          } catch (error) {
+            context.ui.toast.show({ message: error instanceof Error ? error.message : "Invalid setting", variant: "warning" })
+          }
+        }
+      } catch {
+        context.ui.toast.show({ message: "Could not save quota settings", variant: "warning" })
+      }
+    }
+
     const [state, updateState] = context.storage.memory<FooterState>("footer", {
       initial: { snapshot: null, refreshing: false },
     })
@@ -178,11 +256,17 @@ export default Plugin.define({
         priority: 10,
         commands: [
           {
+            id: "openai-quota.settings",
+            title: "Settings",
+            group: "OpenAI quota",
+            palette: true,
+            run: openSettings,
+          },
+          {
             id: "openai-quota.refresh",
             title: "Refresh OpenAI quota",
             description: "Force a fresh OpenAI subscription quota check",
             group: "OpenAI quota",
-            palette: true,
             slash: { name: "quota" },
             run: async () => {
               if (!isOpenAISelected()) {
@@ -234,9 +318,7 @@ export default Plugin.define({
 
       return (
         <Show when={selected()}>
-          <text>
-            {!state.webOnly && state.snapshot ? formatQuota(state.snapshot, now()) : "OpenAI: —/—"}
-          </text>
+          <Display snapshot={state.webOnly ? null : state.snapshot} now={now()} />
         </Show>
       )
     }

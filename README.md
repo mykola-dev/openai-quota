@@ -1,31 +1,27 @@
-# OpenCode OpenAI Quota Plugin
+# ⚡ OpenAI Quota for OpenCode
 
-An OpenCode V2 plugin that displays ChatGPT subscription quota only in the bottom prompt footer and refreshes it after successful OpenAI agent executions.
+![OpenCode](https://img.shields.io/badge/OpenCode-2.2.3-808080?style=flat-square)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![5-hour quota](https://img.shields.io/badge/5h_quota-02dbf7?style=flat-square)
+![7-day quota](https://img.shields.io/badge/7d_quota-f3f702?style=flat-square)
 
-Targets OpenCode V2.2.3 with `@opencode/plugin@2.2.3` and OpenTUI 0.8.0; compatibility with other releases must be verified.
+Your ChatGPT quota, right in the OpenCode footer. Remaining **5-hour & 7-day limits**, reset countdowns, and customizable colors — without leaving the terminal. ✨
 
-**Limitation:** newer ChatGPT token-sharing sign-ins do not expose numeric quota through the endpoint used here. The plugin shows `—/—` and `/quota` provides the usage-page URL instead.
+![OpenAI quota in the OpenCode footer](screenshot.png)
 
-## Behavior
+## 🚀 Install
 
-- Appends `OpenAI: 37%/88% 02:15/4d` only to `prompt.footer.status`, not the home-screen footer; it never replaces the footer or other plugins' contributions.
-- Countdown values follow the same primary/secondary order as percentages. Below 24 hours they show `HH:MM` (rounded up to a minute); longer durations show whole remaining days (`4d`). The countdown redraws locally every 30 seconds, without quota requests. At expiry it stays at `00:00` until fresh usage data arrives; percentages are never guessed.
-- Reset times come from `reset_at` (Unix seconds), falling back to `reset_after_seconds` relative to fetch time. Missing reset times show `—`; when both are missing (including old caches), the countdown is omitted until the next normal refresh.
-- Shows the status and makes quota requests only while the selected model's `providerID` is `openai`.
-- Restores the last successful snapshot from server-side plugin storage after restart. A cache read does not call OpenAI.
-- Automatically refreshes after successful executions. Requests are single-flight and normally at least 60 seconds apart; if throttled, one trailing refresh is scheduled and re-checks the selected provider before running.
-- `/quota` forces a refresh past the normal interval. It still respects an OpenAI `429` `Retry-After` cooldown and never runs for a non-OpenAI selection.
-- Stores lightweight private counters (`debug:stats`: attempts, successes, failures, cancellations, last HTTP/error status, and backoff timestamps) in plugin storage for debugging. There is no debug command, file log, token logging, or raw response logging.
-- Uses the current OpenAI OAuth connection. API keys are not used for ChatGPT subscription quota.
-- New Sign in with ChatGPT token-sharing grants (`chatgpt.tokens.use.direct`) retain `OpenAI: —/—` in the footer. OpenAI does not expose numeric quota for these grants through the legacy usage endpoint; the plugin never sends them there. `/quota` shows https://chatgpt.com/settings/usage without opening a browser; verify the browser is signed into the intended account. Relogin is not required.
-- Switching credentials clears the old account's display, loads the new cache and refreshes automatically. Auth failures and automatic backoff are account-scoped; a rotated token clears the old token's auth block. Server-requested `429` cooldowns remain respected across switches.
-- HTTP 401 and 403 have distinct diagnostics; forbidden quota access is not presented as proof that a token expired.
+**1. Clone and install dependencies**
 
-The endpoint is an undocumented ChatGPT backend endpoint, so its schema or availability can change without notice.
+```sh
+git clone https://github.com/mykola-dev/openai-quota.git
+cd openai-quota
+npm ci --ignore-scripts
+```
 
-## Install from a local checkout
+**2. Add the checkout to your global `~/.config/opencode/opencode.json`**
 
-Clone this repository and add its absolute directory to `plugins` in your global `~/.config/opencode/opencode.json` (merge with existing entries):
+Merge this entry with your existing plugins, using the **absolute path** to the cloned folder:
 
 ```jsonc
 {
@@ -34,39 +30,22 @@ Clone this repository and add its absolute directory to `plugins` in your global
 }
 ```
 
-On Windows, use forward slashes, for example `D:/dev/ai/openai-quota`. One entry loads both server and TUI parts; no `cli.json` entry is needed. Use `/reload` if necessary.
+On Windows, use forward slashes: `D:/dev/ai/openai-quota`.
 
-Do not load this checkout alongside a discovered copy of the same plugin.
+**3. Run `/reload`, select an OpenAI model, and you're set. 🎉**
 
-## Alternative: global plugin discovery
+Requires OpenCode V2 (tested on **2.2.3**), an OpenAI **Sign in with ChatGPT** connection, and Node.js **26.4.0+** for the install command above. No separate API key needed.
 
-OpenCode V2 automatically discovers global plugins in `~/.config/opencode/plugins/`. Copy this directory there as `openai-quota`:
+## 🎨 Make it yours
+
+Open the command palette → **OpenAI quota → Settings** to edit the template, hex/RGBA colors, or preview your layout. Settings are saved automatically. Use `/quota` to refresh manually.
+
+Default template:
 
 ```text
-~/.config/opencode/plugins/openai-quota/index.ts
-~/.config/opencode/plugins/openai-quota/tui.ts
-~/.config/opencode/plugins/openai-quota/src/...
+{percent5h} {percent7d} | {reset5h} {reset7d}
 ```
 
-The root `index.ts` and `tui.ts` expose both server and TUI entrypoints. No `plugins` config entry or `cli.json` entry is needed for global discovery. After copying or changing the plugin, reload OpenCode configuration.
+Add any prefix or separators as plain text. Cyan is the 5-hour window; yellow is the 7-day window. 🩵 💛
 
-## Development
-
-Use Node.js >=26.4.0 for development (required by OpenTUI 0.8.0), or a compatible Bun >=1.3.14 environment. Tests and typechecking were verified with Node.js 26.4.0. OpenCode runs the installed plugin in its own runtime; this does not require replacing your system Node.js.
-
-```sh
-npm ci --ignore-scripts
-npm test
-npm run typecheck
-npm pack --dry-run
-```
-
-Tests use generated dummy credentials and mocked HTTP; they do not need an OpenAI account or send usage requests.
-
-## npm publication
-
-This package is not published yet and intentionally retains `private: true`. Before publishing, choose the final available package name and license, add repository metadata, remove `private`, review `npm pack --dry-run`, and test installation of the resulting tarball in OpenCode. npm publication and GitHub publication are separate steps.
-
-## Privacy and security
-
-See [SECURITY.md](SECURITY.md) for credential handling, stored data, and reporting guidance. This is an unofficial integration using an undocumented endpoint, not an OpenAI-supported quota API.
+> **Heads up:** some newer ChatGPT sign-ins don't expose numeric quota. The plugin shows `—`; `/quota` provides the ChatGPT usage-page URL. This is an unofficial plugin using an undocumented endpoint, so availability may change.

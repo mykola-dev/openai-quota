@@ -4,7 +4,7 @@
   "private": true,
   "description": "ChatGPT subscription quota in the OpenCode V2 prompt footer",
   "type": "module",
-  "files": ["index.ts", "tui.ts", "src", "README.md", "CHANGELOG.md", "SECURITY.md"],
+  "files": ["index.ts", "tui.ts", "src", "README.md", "screenshot.png"],
   "exports": {
     ".": "./index.ts",
     "./tui": "./tui.ts",
