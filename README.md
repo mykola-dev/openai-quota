@@ -1,10 +1,5 @@
 # ⚡ OpenAI Quota for OpenCode
 
-![OpenCode](https://img.shields.io/badge/OpenCode-2.2.3-808080?style=flat-square)
-![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
-![5-hour quota](https://img.shields.io/badge/5h_quota-02dbf7?style=flat-square)
-![7-day quota](https://img.shields.io/badge/7d_quota-f3f702?style=flat-square)
-
 Your ChatGPT quota, right in the OpenCode footer. Remaining **5-hour & 7-day limits**, reset countdowns, and customizable colors — without leaving the terminal. ✨
 
 ![OpenAI quota in the OpenCode footer](screenshot.png)
