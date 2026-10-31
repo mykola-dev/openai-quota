@@ -34,7 +34,19 @@ const resultSchema = {
 
 export const QuotaRpc = Rpc.define({
   id: "openai-quota",
-  events: {},
+  events: {
+    primary_reset: {
+      schema: {
+        type: "object",
+        properties: {
+          eventID: { type: "string" },
+          resetAt: { type: "integer", minimum: 0 },
+        },
+        required: ["eventID", "resetAt"],
+        additionalProperties: false,
+      },
+    },
+  },
   methods: {
     cached: {
       input: {
@@ -54,6 +66,20 @@ export const QuotaRpc = Rpc.define({
         additionalProperties: false,
       },
       output: resultSchema,
+    },
+    claimSound: {
+      input: {
+        type: "object",
+        properties: { eventID: { type: "string" } },
+        required: ["eventID"],
+        additionalProperties: false,
+      },
+      output: {
+        type: "object",
+        properties: { claimed: { type: "boolean" } },
+        required: ["claimed"],
+        additionalProperties: false,
+      },
     },
   },
 })

@@ -45,7 +45,7 @@ Never paste your login code or tokens into an issue or chat.
 
 ## 🎨 Make it yours
 
-Open the command palette → **OpenAI quota → Settings** to edit the template, hex/RGBA colors, or preview your layout. Settings are saved automatically. Use `/quota` to refresh manually.
+Open the command palette → **OpenAI quota → Settings** to toggle reset notifications, edit the template and hex/RGBA colors, or preview your layout. Notifications are enabled by default: every connected TUI shows a toast when the 5-hour quota resets, while only one terminal plays the sound. The sound follows OpenCode's global attention sound settings. Settings are saved automatically. Use `/quota` to refresh manually.
 
 Default template:
 

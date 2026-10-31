@@ -4,6 +4,13 @@ import { QuotaRpc, type QuotaResult, type QuotaSnapshot } from "./rpc.js"
 import { formatQuota, isOpenAIProvider, OPENAI_PROVIDER_ID } from "./usage.js"
 import { COLOR_KEYS, DEFAULT_SETTINGS, migratePrefix, parseTemplate, renderTemplate, validateColor, type DisplaySettings } from "./presentation.js"
 
+const DEFAULT_NOTIFICATIONS_ENABLED = true
+
+interface PluginSettings extends DisplaySettings {
+  notificationsEnabled: boolean
+  prefix?: string
+}
+
 interface FooterState {
   snapshot: QuotaSnapshot | null
   refreshing: boolean
@@ -13,9 +20,12 @@ interface FooterState {
 export default Plugin.define({
   id: "openai-quota.tui",
   async setup(context) {
-    const [settings, updateSettings] = context.storage.store<DisplaySettings & { prefix?: string }>("settings", {
-      initial: structuredClone(DEFAULT_SETTINGS),
+    const [settings, updateSettings] = context.storage.store<PluginSettings>("settings", {
+      initial: { ...structuredClone(DEFAULT_SETTINGS), notificationsEnabled: DEFAULT_NOTIFICATIONS_ENABLED },
     })
+    if (typeof settings.notificationsEnabled !== "boolean") {
+      await updateSettings((draft) => { draft.notificationsEnabled = DEFAULT_NOTIFICATIONS_ENABLED })
+    }
     if (typeof settings.prefix === "string") {
       await updateSettings((draft) => {
         const migrated = migratePrefix({ ...draft, prefix: draft.prefix! })
@@ -46,22 +56,35 @@ export default Plugin.define({
 
     async function openSettings(): Promise<void> {
       try {
+        let currentChoice: string | undefined
         while (true) {
           const choice = await context.ui.dialog.select({
             title: "OpenAI quota settings",
+            current: currentChoice,
             options: [
               { title: "Template", value: "template", description: settings.template || "Hidden" },
               { title: "Default color", value: "defaultColor", description: settings.defaultColor || "Theme default" },
               ...COLOR_KEYS.map((key) => ({ title: `Color: ${key}`, value: key, description: settings.colors[key] || "Default color" })),
               { title: "Preview", value: "preview" },
+              {
+                title: `${settings.notificationsEnabled ? "☑  " : "☐ "}5-hour reset alert`,
+                value: "notifications",
+              },
               { title: "Reset to defaults", value: "reset" },
             ],
           })
           if (choice === undefined) return
+          currentChoice = choice
           if (choice === "preview") { showPreview(); return }
+          if (choice === "notifications") {
+            await updateSettings((draft) => { draft.notificationsEnabled = !draft.notificationsEnabled })
+            continue
+          }
           if (choice === "reset") {
             if (await context.ui.dialog.confirm({ title: "Reset quota settings?", message: "Restore the default template and colors?" })) {
-              await updateSettings((draft) => { Object.assign(draft, structuredClone(DEFAULT_SETTINGS)) })
+              await updateSettings((draft) => {
+                Object.assign(draft, structuredClone(DEFAULT_SETTINGS), { notificationsEnabled: DEFAULT_NOTIFICATIONS_ENABLED })
+              })
             }
             continue
           }
@@ -99,6 +122,32 @@ export default Plugin.define({
       refresh: async (force: boolean, signal: AbortSignal) =>
         (await rawQuota.refresh({ force }, { signal })) as QuotaResult,
     }
+
+    const seenResetEvents = new Set<string>()
+    const stopResetListener = rawQuota.events.on("primary_reset", (event) => {
+      const { eventID } = event.data as { eventID: string; resetAt: number }
+      if (!settings.notificationsEnabled || seenResetEvents.has(eventID)) return
+      seenResetEvents.add(eventID)
+
+      const title = "OpenAI quota reset"
+      const message = "Your 5-hour quota window has reset."
+      context.ui.toast.show({ title, message, variant: "success", duration: 8_000 })
+
+      void (async () => {
+        try {
+          const result = await rawQuota.claimSound({ eventID }) as { claimed: boolean }
+          if (!result.claimed || !settings.notificationsEnabled) return
+          await context.attention.notify({
+            title,
+            message,
+            notification: false,
+            sound: { name: "done", when: "always" },
+          })
+        } catch {
+          // The toast remains useful if sound arbitration is unavailable.
+        }
+      })()
+    })
 
     let selectionGeneration = 0
     let activeRequest:
@@ -333,6 +382,7 @@ export default Plugin.define({
     })
 
     return () => {
+      stopResetListener()
       stopExecutionListener()
       stopCredentialListener()
       stopConnectionListener()

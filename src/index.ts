@@ -1,5 +1,6 @@
 import { Plugin } from "@opencode/plugin"
 import { QuotaRpc } from "./rpc.js"
+import { createResetAlarm, createResetSoundClaim } from "./reset-alarm.js"
 import { createQuotaService } from "./service.js"
 
 export default Plugin.define({
@@ -26,12 +27,36 @@ export default Plugin.define({
       set: async (key, value) => context.storage.set(key, value),
     })
 
-    const registration = await context.rpc.register(QuotaRpc, {
-      cached: async () => service.cached(),
-      refresh: async (input, rpcContext) =>
-        service.refresh(input as { force: boolean }, rpcContext.signal),
+    let emitReset: (event: { eventID: string; resetAt: number }) => Promise<void> = async () => {}
+    const resetAlarm = createResetAlarm({
+      emit: (event) => emitReset(event),
+      onError: (error) => console.error("[openai-quota] Could not emit reset notification", error),
     })
+    const startup = await service.cached()
 
-    return () => registration.dispose()
+    const claimResetSound = createResetSoundClaim()
+    const registration = await context.rpc.register(QuotaRpc, {
+      cached: async () => {
+        const result = await service.cached()
+        resetAlarm.schedule(result.snapshot?.primaryResetAt)
+        return result
+      },
+      refresh: async (input, rpcContext) => {
+        const result = await service.refresh(input as { force: boolean }, rpcContext.signal)
+        resetAlarm.schedule(result.snapshot?.primaryResetAt)
+        return result
+      },
+      claimSound: async (input) => {
+        const { eventID } = input as { eventID: string }
+        return { claimed: claimResetSound(eventID) }
+      },
+    })
+    emitReset = (event) => registration.events.emit("primary_reset", event)
+    resetAlarm.schedule(startup.snapshot?.primaryResetAt)
+
+    return () => {
+      resetAlarm.cancel()
+      return registration.dispose()
+    }
   },
 })
